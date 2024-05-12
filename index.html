@@ -131,25 +131,28 @@
             });
 
           let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-          let dst = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+          let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
           let gray = new cv.Mat();
           let cell = new cv.Mat();
           let cap = new cv.VideoCapture(video);
           let count = 0;
+          let lifegameFPS = 5;
           const detector = new cv.QRCodeDetector();
 
-          const FPS = 15;
+          const FPS = 30;
           function processVideo() {
             try {
               let begin = Date.now();
               cap.read(src);
-              src.copyTo(dst);
+              src.copyTo(frame);
 
               let points = new cv.Mat();
               let straightCode = new cv.Mat();
-              detector.detectAndDecode(dst, points, straightCode);
+              detector.detectAndDecode(frame, points, straightCode);
 
               if (straightCode.size().width > 0) {
+                count = 0;
+
                 const resized = new cv.Mat();
                 cv.resize(straightCode, resized, new cv.Size(50, 50));
 
@@ -159,15 +162,20 @@
                 if (cell.size().width === 0) {
                   cell = binary;
                 } else {
-                  cell = update(cell);
+                  if (lifegameFPS === 0) {
+                    cell = update(cell);
+                    lifegameFPS = 5;
+                  } else {
+                    lifegameFPS--;
+                  }
                 }
 
                 const showCell = new cv.Mat();
                 cell.convertTo(showCell, cv.CV_8U);
-                let binaryData = showCell.data;
+                let showData = showCell.data;
 
-                for (let i = 0; i < binaryData.length; i++) {
-                  binaryData[i] = (1 - binaryData[i]) * 255;
+                for (let i = 0; i < showData.length; i++) {
+                  showData[i] = (1 - showData[i]) * 255;
                 }
 
                 // 画面に表示する
@@ -188,12 +196,78 @@
                 cv.cvtColor(showCell, showCell, cv.COLOR_GRAY2RGBA);
                 cv.warpPerspective(showCell, warped, M, dsize);
 
+                // pythonのコード
+                // mask = (warped[:, :, 3] == 0).astype(np.uint8)  # 透過マスク
+                // mask = cv2.merge([mask, mask, mask])
+                // frame_masked = frame * mask
+                // frame = frame_masked + warped[:, :, :3] * (1 - mask[:, :, :3])
+
+                // warpedの透過マスクを作成する
+                // アルファチャンネルが0の部分を1、それ以外を0にする
+                const mask = new cv.Mat(480, 640, cv.CV_8UC1);
+                const maskData = mask.data;
+                // アルファチャンネルが0の部分を1、それ以外を0にする
+                for (let i = 0; i < warped.rows; i++) {
+                  for (let j = 0; j < warped.cols; j++) {
+                    if (warped.ucharPtr(i, j)[3] === 0) {
+                      maskData[i * warped.cols + j] = 1;
+                    } else {
+                      maskData[i * warped.cols + j] = 0;
+                    }
+                  }
+                }
+
+                // マスクを3チャンネルに変換する
+                const mask3 = new cv.Mat(480, 640, cv.CV_8UC3);
+                const maskV = new cv.MatVector();
+                maskV.push_back(mask);
+                maskV.push_back(mask);
+                maskV.push_back(mask);
+                cv.merge(maskV, mask3);
+
+                // マスクを反転する
+                const invMask = new cv.Mat(480, 640, cv.CV_8UC3);
+                cv.bitwise_not(mask3, invMask);
+
+                // マスクを使って元の画像をマスクする
+                // maskedFrame = frame * mask
+                const maskedFrame = new cv.Mat(480, 640, cv.CV_8UC3);
+                // frameのタイプを変更する
+                const frame3 = new cv.Mat(480, 640, cv.CV_8UC3);
+                cv.cvtColor(frame, frame3, cv.COLOR_RGBA2RGB);
+                cv.multiply(frame3, mask3, maskedFrame);
+
+                // 反転したマスクを使ってwarpedをマスクする
+                const invMaskedWarped = new cv.Mat(480, 640, cv.CV_8UC3);
+                const warped3 = new cv.Mat(480, 640, cv.CV_8UC3);
+                cv.cvtColor(warped, warped3, cv.COLOR_RGBA2RGB);
+                cv.multiply(warped3, invMask, invMaskedWarped);
+
+                // マスクした元の画像とマスクしたwarpedを合成する
+                const result = new cv.Mat(480, 640, cv.CV_8UC3);
+                cv.add(maskedFrame, invMaskedWarped, result);
+
                 src.delete();
                 points.delete();
+                straightCode.delete();
+                resized.delete();
+                showCell.delete();
+                warped.delete();
+                mask.delete();
+                mask3.delete();
+                invMask.delete();
+                maskedFrame.delete();
+                invMaskedWarped.delete();
 
-                cv.imshow("canvas", dst);
+                cv.imshow("canvas", result);
+                result.delete();
               } else {
-                cv.imshow("canvas", dst);
+                count++;
+                if (count > 10) {
+                  count = 0;
+                  cell = new cv.Mat();
+                }
+                cv.imshow("canvas", frame);
               }
 
               let delay = 1000 / FPS - (Date.now() - begin);
