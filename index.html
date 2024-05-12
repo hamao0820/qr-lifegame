@@ -44,9 +44,12 @@
       <button onclick="startLiveScan()">Live scan</button>
       <div id="resultContainer"></div>
       <div class="scanner">
-        <canvas></canvas>
+        <canvas id="canvas"></canvas>
         <video
           class="camera"
+          id="camera"
+          width="640"
+          height="480"
           muted
           autoplay="autoplay"
           playsinline="playsinline"
@@ -56,195 +59,131 @@
       </div>
     </div>
     <script type="text/javascript">
-      let detector;
-      let dbr;
-      let imgElement = document.getElementById("imageSrc");
-      let inputElement = document.getElementById("fileInput");
-      let localStream;
-      let interval;
-      let decoding = false;
+      // def update(old):
+      //   @np.vectorize
+      //   def sum_around(i, j):
+      //       return old[max(0, i - 1) : i + 2, max(0, j - 1) : j + 2].sum() - old[i, j]
 
-      document.getElementsByClassName("camera")[0].addEventListener(
-        "loadeddata",
-        () => {
-          startDecodingLoop();
-        },
-        false
-      );
+      //   around = np.fromfunction(sum_around, old.shape, dtype=int)
+      //   new = np.where(old, ((2 <= around) & (around <= 3)), (around == 3))
+      //   return new
 
-      function getPointsAndStraightCode(imageSource) {
-        let results = [];
-        let mat = cv.imread(imageSource);
-        let points = new cv.Mat();
-        let straightCode = new cv.Mat();
-        detector.detectAndDecode(mat, points, straightCode);
-        mat.delete();
-        return { points, straightCode };
-      }
+      // cv.Mat -> cv.Mat
+      function update(old) {
+        // oldと同じサイズの新しい行列を作成する
+        let newMat = new cv.Mat();
+        old.copyTo(newMat);
 
-      function displayBarcodeResults(results) {
-        // let resultContainer = document.getElementById("resultContainer");
-        // resultContainer.innerHTML = "";
-        let list = document.createElement("ol");
-        for (let index = 0; index < results.length; index++) {
-          const result = results[index];
-          let item = document.createElement("li");
-          item.innerText = result;
-          list.appendChild(item);
-        }
-        resultContainer.appendChild(list);
-      }
+        // 各ピクセルを更新する
+        for (let i = 0; i < old.rows; i++) {
+          for (let j = 0; j < old.cols; j++) {
+            // 周囲の合計を計算する
+            let sum = 0;
+            for (let di = -1; di <= 1; di++) {
+              for (let dj = -1; dj <= 1; dj++) {
+                let ni = i + di;
+                let nj = j + dj;
 
-      function switchDetector() {
-        if (cv) {
-          detector = new cv.QRCodeDetector();
-        }
-      }
-
-      function startLiveScan() {
-        document.getElementsByClassName("scanner")[0].style.display = "";
-        loadDevicesAndPlay();
-      }
-
-      function stopLiveScan() {
-        stopDecodingLoop();
-        document.getElementsByClassName("scanner")[0].style.display = "none";
-        stop();
-      }
-
-      function startDecodingLoop() {
-        stopDecodingLoop();
-        interval = setInterval(captureAndDecode, 200);
-      }
-
-      async function captureAndDecode() {
-        if (decoding) {
-          return;
-        }
-        if (!cv) {
-          return;
-        }
-        decoding = true;
-        try {
-          capture();
-          let cvs = document.querySelector("canvas");
-          const { points, straightCode } = getPointsAndStraightCode(cvs);
-          console.log(points.size(), straightCode.size());
-          if (points.size().width > 0) {
-            // canvasにstraightCodeを描画
-            const ctx = cvs.getContext("2d");
-            ctx.beginPath();
-            ctx.moveTo(points.data32F[0], points.data32F[1]);
-            ctx.lineTo(points.data32F[2], points.data32F[3]);
-            ctx.lineTo(points.data32F[4], points.data32F[5]);
-            ctx.lineTo(points.data32F[6], points.data32F[7]);
-            ctx.closePath();
-            ctx.strokeStyle = "red";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
-        } catch (e) {
-          console.error(e);
-        } finally {
-          decoding = false;
-        }
-      }
-
-      function capture() {
-        const video = document.querySelector(".camera");
-        const canvas = document.querySelector("canvas");
-        const w = video.videoWidth;
-        const h = video.videoHeight;
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, w, h);
-      }
-
-      function stopDecodingLoop() {
-        clearInterval(interval);
-        decoding = false;
-      }
-
-      function loadDevicesAndPlay() {
-        var constraints = { video: true, audio: false };
-        navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-          localStream = stream;
-          // var cameraselect = document.getElementById("cameraSelect");
-          // cameraselect.innerHTML = "";
-          navigator.mediaDevices.enumerateDevices().then(function (devices) {
-            var count = 0;
-            var cameraDevices = [];
-            var defaultIndex = 0;
-            for (var i = 0; i < devices.length; i++) {
-              var device = devices[i];
-              if (device.kind == "videoinput") {
-                cameraDevices.push(device);
-                var label = device.label || `Camera ${count++}`;
-                // cameraselect.add(new Option(label, device.deviceId));
-                if (label.toLowerCase().indexOf("back") != -1) {
-                  //select the back camera as the default
-                  defaultIndex = cameraDevices.length - 1;
+                // 範囲をはみ出さないようにする
+                if (ni >= 0 && ni < old.rows && nj >= 0 && nj < old.cols) {
+                  sum += old.ucharPtr(ni, nj)[0];
                 }
               }
             }
 
-            if (cameraDevices.length > 0) {
-              // cameraselect.selectedIndex = defaultIndex;
-              play(cameraDevices[defaultIndex].deviceId);
+            // 自分自身を引く
+            sum -= old.ucharPtr(i, j)[0];
+
+            // ルールに基づいて新しい値を設定する
+            let currentValue = old.ucharPtr(i, j)[0];
+            if (currentValue) {
+              if (sum >= 2 && sum <= 3) {
+                newMat.ucharPtr(i, j)[0] = 1;
+              } else {
+                newMat.ucharPtr(i, j)[0] = 0;
+              }
             } else {
-              alert("No camera detected.");
+              if (sum === 3) {
+                newMat.ucharPtr(i, j)[0] = 1;
+              } else {
+                newMat.ucharPtr(i, j)[0] = 0;
+              }
             }
-          });
-        });
-      }
-
-      function play(deviceId) {
-        stop(); // close before play
-        var constraints = {};
-
-        if (!!deviceId) {
-          constraints = {
-            video: { deviceId: deviceId },
-            audio: false,
-          };
-        } else {
-          constraints = {
-            video: true,
-            audio: false,
-          };
-        }
-
-        navigator.mediaDevices
-          .getUserMedia(constraints)
-          .then(function (stream) {
-            localStream = stream;
-            var cameraVideo = document.getElementsByClassName("camera")[0];
-            // Attach local stream to video element
-            cameraVideo.srcObject = localStream;
-          })
-          .catch(function (err) {
-            console.error("getUserMediaError", err, err.stack);
-            alert(err.message);
-          });
-      }
-
-      function stop() {
-        try {
-          if (localStream) {
-            localStream.getTracks().forEach((track) => track.stop());
           }
-        } catch (e) {
-          alert(e.message);
         }
-      }
 
+        return newMat;
+      }
       var Module = {
         // https://emscripten.org/docs/api_reference/module.html#Module.onRuntimeInitialized
         onRuntimeInitialized() {
           document.getElementById("status").innerHTML = "OpenCV.js is ready.";
-          detector = new cv.QRCodeDetector();
-          startLiveScan();
+
+          const video = document.getElementById("camera"); // video is the id of video tag
+          navigator.mediaDevices
+            .getUserMedia({ video: true, audio: false })
+            .then(function (stream) {
+              video.srcObject = stream;
+              video.play();
+            })
+            .catch(function (err) {
+              console.log("An error occurred! " + err);
+            });
+
+          let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+          let dst = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+          let gray = new cv.Mat();
+          let cell = new cv.Mat();
+          let cap = new cv.VideoCapture(video);
+          let count = 0;
+          const detector = new cv.QRCodeDetector();
+
+          const FPS = 15;
+          function processVideo() {
+            try {
+              let begin = Date.now();
+              cap.read(src);
+              src.copyTo(dst);
+
+              let points = new cv.Mat();
+              let straightCode = new cv.Mat();
+              detector.detectAndDecode(dst, points, straightCode);
+
+              if (straightCode.size().width > 0) {
+                const resized = new cv.Mat();
+                cv.resize(straightCode, resized, new cv.Size(50, 50));
+
+                const binary = new cv.Mat();
+                cv.threshold(resized, binary, 127, 1, cv.THRESH_BINARY);
+
+                if (cell.size().width === 0) {
+                  cell = binary;
+                } else {
+                  cell = update(cell);
+                }
+
+                const showCell = new cv.Mat();
+                cell.convertTo(showCell, cv.CV_8U);
+                let binaryData = showCell.data;
+
+                for (let i = 0; i < binaryData.length; i++) {
+                  binaryData[i] = (1 - binaryData[i]) * 255;
+                }
+
+                cv.imshow("canvas", showCell);
+              } else {
+                cv.imshow("canvas", dst);
+              }
+
+              let delay = 1000 / FPS - (Date.now() - begin);
+              setTimeout(processVideo, delay);
+            } catch (err) {
+              console.error(err);
+            }
+          }
+
+          // schedule the first one.
+          setTimeout(processVideo, 0);
         },
       };
     </script>
