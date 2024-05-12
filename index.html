@@ -48,8 +48,8 @@
         <video
           class="camera"
           id="camera"
-          width="640"
-          height="480"
+          width="480"
+          height="640"
           muted
           autoplay="autoplay"
           playsinline="playsinline"
@@ -134,7 +134,7 @@
               video.play();
             })
             .catch(function (err) {
-              console.log("An error occurred! " + err);
+              console.err("An error occurred! " + err);
             });
 
           let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
@@ -197,7 +197,7 @@
                   cell.rows,
                 ]);
                 const M = cv.getPerspectiveTransform(src, points);
-                const dsize = new cv.Size(640, 480);
+                const dsize = new cv.Size(480, 640);
                 const warped = new cv.Mat();
                 // showCellをRGBAに変換する
                 cv.cvtColor(showCell, showCell, cv.COLOR_GRAY2RGBA);
@@ -211,7 +211,7 @@
 
                 // warpedの透過マスクを作成する
                 // アルファチャンネルが0の部分を1、それ以外を0にする
-                const mask = new cv.Mat(480, 640, cv.CV_8UC1);
+                const mask = new cv.Mat(640, 480, cv.CV_8UC1);
                 const maskData = mask.data;
                 // アルファチャンネルが0の部分を1、それ以外を0にする
                 for (let i = 0; i < warped.rows; i++) {
@@ -225,7 +225,7 @@
                 }
 
                 // マスクを3チャンネルに変換する
-                const mask3 = new cv.Mat(480, 640, cv.CV_8UC3);
+                const mask3 = new cv.Mat(640, 480, cv.CV_8UC3);
                 const maskV = new cv.MatVector();
                 maskV.push_back(mask);
                 maskV.push_back(mask);
@@ -233,25 +233,25 @@
                 cv.merge(maskV, mask3);
 
                 // マスクを反転する
-                const invMask = new cv.Mat(480, 640, cv.CV_8UC3);
+                const invMask = new cv.Mat(640, 480, cv.CV_8UC3);
                 cv.bitwise_not(mask3, invMask);
 
                 // マスクを使って元の画像をマスクする
                 // maskedFrame = frame * mask
-                const maskedFrame = new cv.Mat(480, 640, cv.CV_8UC3);
+                const maskedFrame = new cv.Mat(640, 480, cv.CV_8UC3);
                 // frameのタイプを変更する
-                const frame3 = new cv.Mat(480, 640, cv.CV_8UC3);
+                const frame3 = new cv.Mat(640, 480, cv.CV_8UC3);
                 cv.cvtColor(frame, frame3, cv.COLOR_RGBA2RGB);
                 cv.multiply(frame3, mask3, maskedFrame);
 
                 // 反転したマスクを使ってwarpedをマスクする
-                const invMaskedWarped = new cv.Mat(480, 640, cv.CV_8UC3);
-                const warped3 = new cv.Mat(480, 640, cv.CV_8UC3);
+                const invMaskedWarped = new cv.Mat(640, 480, cv.CV_8UC3);
+                const warped3 = new cv.Mat(640, 480, cv.CV_8UC3);
                 cv.cvtColor(warped, warped3, cv.COLOR_RGBA2RGB);
                 cv.multiply(warped3, invMask, invMaskedWarped);
 
                 // マスクした元の画像とマスクしたwarpedを合成する
-                const result = new cv.Mat(480, 640, cv.CV_8UC3);
+                const result = new cv.Mat(640, 480, cv.CV_8UC3);
                 cv.add(maskedFrame, invMaskedWarped, result);
 
                 src.delete();
