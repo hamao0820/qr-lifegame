@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0"
+    />
+    <title>Web Barcode Detector with OpenCV.js</title>
+    <style>
+      #imageContainer {
+        max-width: 300px;
+        max-height: 300px;
+        overflow: auto;
+      }
+
+      .fullscreen {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        left: 0;
+        top: 0;
+        background: white;
+      }
+
+      #cameraSelect {
+        z-index: 999;
+        top: 0;
+        position: absolute;
+      }
+
+      #closeButton {
+        z-index: 999;
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Web Barcode Detector with OpenCV.js</h2>
+    <p id="status">OpenCV.js is loading...</p>
+    <div>
+      <button onclick="startLiveScan()">Live scan</button>
+      <div id="resultContainer"></div>
+      <div class="scanner">
+        <canvas></canvas>
+        <video
+          class="camera"
+          muted
+          autoplay="autoplay"
+          playsinline="playsinline"
+          webkit-playsinline
+          style="visibility: hidden"
+        ></video>
+      </div>
+    </div>
+    <script type="text/javascript">
+      let detector;
+      let dbr;
+      let imgElement = document.getElementById("imageSrc");
+      let inputElement = document.getElementById("fileInput");
+      let localStream;
+      let interval;
+      let decoding = false;
+
+      document.getElementsByClassName("camera")[0].addEventListener(
+        "loadeddata",
+        () => {
+          startDecodingLoop();
+        },
+        false
+      );
+
+      function getPointsAndStraightCode(imageSource) {
+        let results = [];
+        let mat = cv.imread(imageSource);
+        let points = new cv.Mat();
+        let straightCode = new cv.Mat();
+        detector.detectAndDecode(mat, points, straightCode);
+        mat.delete();
+        return { points, straightCode };
+      }
+
+      function displayBarcodeResults(results) {
+        // let resultContainer = document.getElementById("resultContainer");
+        // resultContainer.innerHTML = "";
+        let list = document.createElement("ol");
+        for (let index = 0; index < results.length; index++) {
+          const result = results[index];
+          let item = document.createElement("li");
+          item.innerText = result;
+          list.appendChild(item);
+        }
+        resultContainer.appendChild(list);
+      }
+
+      function switchDetector() {
+        if (cv) {
+          detector = new cv.QRCodeDetector();
+        }
+      }
+
+      function startLiveScan() {
+        document.getElementsByClassName("scanner")[0].style.display = "";
+        loadDevicesAndPlay();
+      }
+
+      function stopLiveScan() {
+        stopDecodingLoop();
+        document.getElementsByClassName("scanner")[0].style.display = "none";
+        stop();
+      }
+
+      function startDecodingLoop() {
+        stopDecodingLoop();
+        interval = setInterval(captureAndDecode, 200);
+      }
+
+      async function captureAndDecode() {
+        if (decoding) {
+          return;
+        }
+        if (!cv) {
+          return;
+        }
+        decoding = true;
+        try {
+          capture();
+          let cvs = document.querySelector("canvas");
+          const { points, straightCode } = getPointsAndStraightCode(cvs);
+          console.log(points.size(), straightCode.size());
+          if (points.size().width > 0) {
+            // canvasにstraightCodeを描画
+            const ctx = cvs.getContext("2d");
+            ctx.beginPath();
+            ctx.moveTo(points.data32F[0], points.data32F[1]);
+            ctx.lineTo(points.data32F[2], points.data32F[3]);
+            ctx.lineTo(points.data32F[4], points.data32F[5]);
+            ctx.lineTo(points.data32F[6], points.data32F[7]);
+            ctx.closePath();
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          decoding = false;
+        }
+      }
+
+      function capture() {
+        const video = document.querySelector(".camera");
+        const canvas = document.querySelector("canvas");
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, w, h);
+      }
+
+      function stopDecodingLoop() {
+        clearInterval(interval);
+        decoding = false;
+      }
+
+      function loadDevicesAndPlay() {
+        var constraints = { video: true, audio: false };
+        navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+          localStream = stream;
+          // var cameraselect = document.getElementById("cameraSelect");
+          // cameraselect.innerHTML = "";
+          navigator.mediaDevices.enumerateDevices().then(function (devices) {
+            var count = 0;
+            var cameraDevices = [];
+            var defaultIndex = 0;
+            for (var i = 0; i < devices.length; i++) {
+              var device = devices[i];
+              if (device.kind == "videoinput") {
+                cameraDevices.push(device);
+                var label = device.label || `Camera ${count++}`;
+                // cameraselect.add(new Option(label, device.deviceId));
+                if (label.toLowerCase().indexOf("back") != -1) {
+                  //select the back camera as the default
+                  defaultIndex = cameraDevices.length - 1;
+                }
+              }
+            }
+
+            if (cameraDevices.length > 0) {
+              // cameraselect.selectedIndex = defaultIndex;
+              play(cameraDevices[defaultIndex].deviceId);
+            } else {
+              alert("No camera detected.");
+            }
+          });
+        });
+      }
+
+      function play(deviceId) {
+        stop(); // close before play
+        var constraints = {};
+
+        if (!!deviceId) {
+          constraints = {
+            video: { deviceId: deviceId },
+            audio: false,
+          };
+        } else {
+          constraints = {
+            video: true,
+            audio: false,
+          };
+        }
+
+        navigator.mediaDevices
+          .getUserMedia(constraints)
+          .then(function (stream) {
+            localStream = stream;
+            var cameraVideo = document.getElementsByClassName("camera")[0];
+            // Attach local stream to video element
+            cameraVideo.srcObject = localStream;
+          })
+          .catch(function (err) {
+            console.error("getUserMediaError", err, err.stack);
+            alert(err.message);
+          });
+      }
+
+      function stop() {
+        try {
+          if (localStream) {
+            localStream.getTracks().forEach((track) => track.stop());
+          }
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+
+      var Module = {
+        // https://emscripten.org/docs/api_reference/module.html#Module.onRuntimeInitialized
+        onRuntimeInitialized() {
+          document.getElementById("status").innerHTML = "OpenCV.js is ready.";
+          detector = new cv.QRCodeDetector();
+          startLiveScan();
+        },
+      };
+    </script>
+    <script
+      async
+      src="https://docs.opencv.org/4.8.0/opencv.js"
+      type="text/javascript"
+    ></script>
+  </body>
+</html>
