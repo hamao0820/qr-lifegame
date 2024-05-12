@@ -121,7 +121,14 @@
 
           const video = document.getElementById("camera"); // video is the id of video tag
           navigator.mediaDevices
-            .getUserMedia({ video: true, audio: false })
+            .getUserMedia({
+              video: {
+                facingMode: "environment",
+                width: 480,
+                height: 640,
+              },
+              audio: false,
+            })
             .then(function (stream) {
               video.srcObject = stream;
               video.play();
