@@ -170,7 +170,28 @@
                   binaryData[i] = (1 - binaryData[i]) * 255;
                 }
 
-                cv.imshow("canvas", showCell);
+                // 画面に表示する
+                const src = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                  0,
+                  0,
+                  cell.cols,
+                  0,
+                  cell.cols,
+                  cell.rows,
+                  0,
+                  cell.rows,
+                ]);
+                const M = cv.getPerspectiveTransform(src, points);
+                const dsize = new cv.Size(640, 480);
+                const warped = new cv.Mat();
+                // showCellをRGBAに変換する
+                cv.cvtColor(showCell, showCell, cv.COLOR_GRAY2RGBA);
+                cv.warpPerspective(showCell, warped, M, dsize);
+
+                src.delete();
+                points.delete();
+
+                cv.imshow("canvas", dst);
               } else {
                 cv.imshow("canvas", dst);
               }
