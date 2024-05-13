@@ -6,18 +6,18 @@
       name="viewport"
       content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0"
     />
+    <link rel="stylesheet" href="style.css" />
     <title>Web Barcode Detector with OpenCV.js</title>
   </head>
   <body>
-    <p id="status">OpenCV.js is loading...</p>
     <div>
-      <div class="scanner">
+      <div class="container">
         <canvas id="canvas"></canvas>
         <video
           class="camera"
           id="camera"
-          width="480"
-          height="640"
+          width="420"
+          height="560"
           muted
           autoplay="autoplay"
           playsinline="playsinline"
@@ -27,6 +27,15 @@
       </div>
     </div>
     <script type="text/javascript">
+      const width = Math.min(window.innerWidth, 420);
+      const height = Math.min(window.innerHeight, 560);
+      const $canvas = document.getElementById("canvas");
+      $canvas.width = width;
+      $canvas.height = height;
+      const $camera = document.getElementById("camera");
+      $camera.width = width;
+      $camera.height = height;
+
       // def update(old):
       //   @np.vectorize
       //   def sum_around(i, j):
@@ -85,15 +94,13 @@
       var Module = {
         // https://emscripten.org/docs/api_reference/module.html#Module.onRuntimeInitialized
         onRuntimeInitialized() {
-          document.getElementById("status").innerHTML = "OpenCV.js is ready.";
-
           const video = document.getElementById("camera"); // video is the id of video tag
           navigator.mediaDevices
             .getUserMedia({
               video: {
                 facingMode: "environment",
-                width: 480,
-                height: 640,
+                width: width,
+                height: height,
               },
               audio: false,
             })
@@ -172,7 +179,7 @@
                   cell.rows,
                 ]);
                 const M = cv.getPerspectiveTransform(src, points);
-                const dsize = new cv.Size(480, 640);
+                const dsize = new cv.Size(width, height);
                 const warped = new cv.Mat();
                 // showCellをRGBAに変換する
                 const cellImage = new cv.Mat();
@@ -193,14 +200,14 @@
 
                 // warpedの透過マスクを作成する
                 // アルファチャンネルが0の部分を1、それ以外を0にする
-                const mask = new cv.Mat(640, 480, cv.CV_8UC1);
+                const mask = new cv.Mat(height, width, cv.CV_8UC1);
                 let rgbaPlanes = new cv.MatVector();
                 cv.split(warped, rgbaPlanes);
                 let alpha = rgbaPlanes.get(3);
                 cv.threshold(alpha, mask, 0, 1, cv.THRESH_BINARY_INV);
 
                 // マスクを3チャンネルに変換する
-                const mask3 = new cv.Mat(640, 480, cv.CV_8UC3);
+                const mask3 = new cv.Mat(height, width, cv.CV_8UC3);
                 const maskV = new cv.MatVector();
                 maskV.push_back(mask);
                 maskV.push_back(mask);
@@ -208,25 +215,25 @@
                 cv.merge(maskV, mask3);
 
                 // マスクを反転する
-                const invMask = new cv.Mat(640, 480, cv.CV_8UC3);
+                const invMask = new cv.Mat(height, width, cv.CV_8UC3);
                 cv.bitwise_not(mask3, invMask);
 
                 // マスクを使って元の画像をマスクする
                 // maskedFrame = frame * mask
-                const maskedFrame = new cv.Mat(640, 480, cv.CV_8UC3);
+                const maskedFrame = new cv.Mat(height, width, cv.CV_8UC3);
                 // frameのタイプを変更する
-                const frame3 = new cv.Mat(640, 480, cv.CV_8UC3);
+                const frame3 = new cv.Mat(height, width, cv.CV_8UC3);
                 cv.cvtColor(frame, frame3, cv.COLOR_RGBA2RGB);
                 cv.multiply(frame3, mask3, maskedFrame);
 
                 // 反転したマスクを使ってwarpedをマスクする
-                const invMaskedWarped = new cv.Mat(640, 480, cv.CV_8UC3);
-                const warped3 = new cv.Mat(640, 480, cv.CV_8UC3);
+                const invMaskedWarped = new cv.Mat(height, width, cv.CV_8UC3);
+                const warped3 = new cv.Mat(height, width, cv.CV_8UC3);
                 cv.cvtColor(warped, warped3, cv.COLOR_RGBA2RGB);
                 cv.multiply(warped3, invMask, invMaskedWarped);
 
                 // マスクした元の画像とマスクしたwarpedを合成する
-                const result = new cv.Mat(640, 480, cv.CV_8UC3);
+                const result = new cv.Mat(height, width, cv.CV_8UC3);
                 cv.add(maskedFrame, invMaskedWarped, result);
 
                 mask.delete();
