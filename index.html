@@ -134,8 +134,12 @@
                 const binary = new cv.Mat();
                 cv.threshold(resized, binary, 127, 1, cv.THRESH_BINARY);
 
+                resized.delete();
+
                 if (cell.size().width === 0) {
-                  cell = binary;
+                  binary.copyTo(cell);
+
+                  binary.delete();
                 } else {
                   if (lifegameFPS === 0) {
                     cell = update(cell);
@@ -153,6 +157,8 @@
                 );
                 const flippedCell = new cv.Mat();
                 cv.subtract(ones, cell, flippedCell);
+
+                ones.delete();
 
                 // 画面に表示する
                 const src = cv.matFromArray(4, 1, cv.CV_32FC2, [
@@ -172,6 +178,12 @@
                 const cellImage = new cv.Mat();
                 cv.cvtColor(flippedCell, cellImage, cv.COLOR_GRAY2RGBA);
                 cv.warpPerspective(cellImage, warped, M, dsize);
+
+                src.delete();
+                M.delete();
+                points.delete();
+                cellImage.delete();
+                flippedCell.delete();
 
                 // pythonのコード
                 // mask = (warped[:, :, 3] == 0).astype(np.uint8)  # 透過マスク
@@ -224,19 +236,15 @@
                 const result = new cv.Mat(640, 480, cv.CV_8UC3);
                 cv.add(maskedFrame, invMaskedWarped, result);
 
-                src.delete();
-                points.delete();
-                straightCode.delete();
-                resized.delete();
-                flippedCell.delete();
-                warped.delete();
                 mask.delete();
                 mask3.delete();
                 invMask.delete();
                 maskedFrame.delete();
                 invMaskedWarped.delete();
+                warped.delete();
 
                 cv.imshow("canvas", result);
+
                 result.delete();
               } else {
                 count++;
