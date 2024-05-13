@@ -11,28 +11,26 @@
   </head>
   <body>
     <div>
-      <div class="container">
-        <canvas id="canvas"></canvas>
-        <video
-          class="camera"
-          id="camera"
-          width="420"
-          height="560"
-          muted
-          autoplay="autoplay"
-          playsinline="playsinline"
-          webkit-playsinline
-          style="visibility: hidden"
-        ></video>
-      </div>
+      <canvas id="canvas"></canvas>
+      <video
+        class="camera"
+        id="camera"
+        muted
+        autoplay="autoplay"
+        playsinline="playsinline"
+        webkit-playsinline
+        style="visibility: hidden"
+      ></video>
     </div>
     <script type="text/javascript">
-      const width = Math.min(window.innerWidth, 420);
-      const height = Math.min(window.innerHeight, 560);
+      const size = Math.min(window.innerWidth, window.innerHeight);
+      const width = size;
+      const height = size;
+
       const $canvas = document.getElementById("canvas");
+      const $camera = document.getElementById("camera");
       $canvas.width = width;
       $canvas.height = height;
-      const $camera = document.getElementById("camera");
       $camera.width = width;
       $camera.height = height;
 
@@ -99,8 +97,9 @@
             .getUserMedia({
               video: {
                 facingMode: "environment",
-                width: width,
-                height: height,
+                aspectRatio: {
+                  exact: width / height,
+                },
               },
               audio: false,
             })
@@ -111,9 +110,8 @@
             .catch(function (err) {
               console.err("An error occurred! " + err);
             });
-
-          let src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-          let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+          let src = new cv.Mat(height, width, cv.CV_8UC4);
+          let frame = new cv.Mat(height, width, cv.CV_8UC4);
           let gray = new cv.Mat();
           let cell = new cv.Mat();
           let cap = new cv.VideoCapture(video);
