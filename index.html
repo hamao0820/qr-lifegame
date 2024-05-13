@@ -194,17 +194,10 @@
                 // warpedの透過マスクを作成する
                 // アルファチャンネルが0の部分を1、それ以外を0にする
                 const mask = new cv.Mat(640, 480, cv.CV_8UC1);
-                const maskData = mask.data;
-                // アルファチャンネルが0の部分を1、それ以外を0にする
-                for (let i = 0; i < warped.rows; i++) {
-                  for (let j = 0; j < warped.cols; j++) {
-                    if (warped.ucharPtr(i, j)[3] === 0) {
-                      maskData[i * warped.cols + j] = 1;
-                    } else {
-                      maskData[i * warped.cols + j] = 0;
-                    }
-                  }
-                }
+                let rgbaPlanes = new cv.MatVector();
+                cv.split(warped, rgbaPlanes);
+                let alpha = rgbaPlanes.get(3);
+                cv.threshold(alpha, mask, 0, 1, cv.THRESH_BINARY_INV);
 
                 // マスクを3チャンネルに変換する
                 const mask3 = new cv.Mat(640, 480, cv.CV_8UC3);
